@@ -21,6 +21,19 @@ public class Grid : MonoBehaviour
     private ArrayList nowHightLighted = new ArrayList();
     private ArrayList ships = new ArrayList();
 
+    public Ship CurrentShip
+    {
+        get
+        {
+            return currentShip;
+        }
+
+        set
+        {
+            currentShip = value;
+        }
+    }
+
     void Start()
     {
         // center the grid to screen. fugly implementation
@@ -51,33 +64,17 @@ public class Grid : MonoBehaviour
 
     void Update()
     {
+        if (currentShip == null)
+        {
+            resetHighlighting();
+            return;
+        }
         if (Input.GetMouseButtonDown(0))
         {
             currentShip.Rotate();
             lastMouseIdx = INVALID_CELL_IDX;
-        }
-        switch (cursorState)
-        {
-            case 0:
-                break;
-            case 1:
-                currentShip = new Ship(1);
-                ShipPositionHighlighting();
-                break;
-            case 2:
-                currentShip = new Ship(2);
-                ShipPositionHighlighting();
-                break;
-            case 3:
-                currentShip = new Ship(3);
-                ShipPositionHighlighting();
-                break;
-            case 4:
-                currentShip = new Ship(4);
-                ShipPositionHighlighting();
-                break;
-        }
-        
+        }      
+        ShipPositionHighlighting();              
     }
     
     /// <summary>
