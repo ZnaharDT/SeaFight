@@ -7,15 +7,18 @@ using Assets.Scripts;
 public class Grid : MonoBehaviour
 {
     static readonly Vector2 INVALID_COORDS = new Vector2(-1, -1);
+    static readonly GridPoint INVALID_CELL_POS = new GridPoint(-1, -1);
     const int INVALID_CELL_IDX = -1;
 
     public float cubeSize = 0.9f;
+    public float coordsMultiplier = 0.9f;
     public int gridWidth;
     public int gridHeight;
 
-    public int cursorState;
+    private int cursorState;
 
-    private GridCell[,] grid; // mark occupied cells here from bottom left to top right
+    GridPoint hooverCellPos = new GridPoint(-1, -1);
+    private GridCell[,] grid;
     private Ship currentShip;
     private int lastMouseIdx;
     private ArrayList nowHightLighted = new ArrayList();
@@ -34,11 +37,24 @@ public class Grid : MonoBehaviour
         }
     }
 
+    public int CursorState
+    {
+        get
+        {
+            return cursorState;
+        }
+
+        set
+        {
+            cursorState = value;
+        }
+    }
+
+    public delegate void ShipPlacedEventHandler(object sender, ShipPlacedEventArgs e);
+    public event ShipPlacedEventHandler ShipPlacedEvent;
+
     void Start()
     {
-        // center the grid to screen. fugly implementation
-        //transform.position = new Vector3(-(_GridWidth / 2f) + 0.5f, -(_GridHeight / 2f) + 0.5f, 0);
-
         // create a grid of "GridCell" cubes
         grid = new GridCell[gridWidth,gridHeight];
         for (int i = 0; i < gridHeight; i++)
@@ -46,10 +62,10 @@ public class Grid : MonoBehaviour
             for (int j = 0; j < gridWidth; j++)
             {
                 GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-
                 cube.transform.parent = transform;
-                cube.transform.localPosition = new Vector2(j, i);
+                cube.transform.localPosition = new Vector2(j * coordsMultiplier, i * coordsMultiplier);
                 cube.transform.localScale = Vector3.one * cubeSize;
+                cube.AddComponent<CellHover>().position = new GridPoint(i, j);
 
                 grid[i, j] = new GridCell(cube);
             }
@@ -57,7 +73,6 @@ public class Grid : MonoBehaviour
         
         // set colors for first time drawing
         resetHighlighting();
-
         // make a default dragged building
         currentShip = new Ship(4);
     }
@@ -84,44 +99,55 @@ public class Grid : MonoBehaviour
     {     
         // check which world coordinate the mouse is over. Since gridCells are 1x1 units, 
         // it's translateable to grid coordinates straight away. Should work well enough
-        Vector3 worldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        worldPos -= transform.position - new Vector3(0.5f, 1f, 0f);
-
-        int hoverIndex = coordToIndex((int)worldPos.x, (int)worldPos.y);
-
+        Vector3 cursorWorldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        cursorWorldPos -= transform.position - new Vector3(0.5f, 0.5f, 0f);
+        
         // only check if hovered cell is valid and changed 
-        if (hoverIndex != INVALID_CELL_IDX && hoverIndex != lastMouseIdx)
+        if (hooverCellPos != INVALID_CELL_POS)
         {
             resetHighlighting();
-            checkFit(currentShip, worldPos);
+            checkFit(currentShip, cursorWorldPos);
         }
     }
 
-   /// <summary>
-   /// Calculate index in grid based on coords
-   /// </summary>
-   /// <param name="x">X coord</param>
-   /// <param name="y">Y coord</param>
-   /// <returns>Position on grid</returns>
-    private int coordToIndex(int x, int y)
-    {
-        if (x >= 0 && y >= 0 && x < gridWidth && y < gridHeight)
-            return x + (y * gridWidth);
-        else
-            return INVALID_CELL_IDX;
-    }
-
     /// <summary>
-    /// Calculate grid coords based on given index
+    /// Check fitting ship to the grid
     /// </summary>
-    /// <param name="i">Index to calculate coords</param>
-    /// <returns>Vector2 coords</returns>
-    private Vector2 indexToCoord(int i)
+    /// <param name="ship">Current ship</param>
+    /// <param name="worldPosition">Position in world</param>
+    void checkFit(Ship ship, Vector3 worldPosition)
     {
-        if (i >= 0 && i < grid.Length)
-            return new Vector2(i % gridWidth, i / gridWidth);
-        else
-            return INVALID_COORDS;
+        // bottom left coords of building in grid
+        Vector2 startCoords = worldPosition;
+        bool[] shipCells = ship.rotatedCells;
+
+        nowHightLighted.Clear();
+        // loop through building cells and see which cells are reserved in both building and grid
+        for (int y = 0; y < ship.height; y++)
+        {
+            for (int x = 0; x < ship.width; x++)
+            {
+                // this building cell matches this index in grid
+
+                int[] indexInGrid = { hooverCellPos.i + y, hooverCellPos.j + x };
+                if (indexInGrid[0] == INVALID_CELL_IDX || indexInGrid[1] == INVALID_CELL_IDX)
+                    continue;
+
+                int indexInBuilding = ship.coordToIndex(x, y);
+
+                // if this index inside the building is reserved, check if the underlying grid cell is reserved
+                if (shipCells[indexInBuilding])
+                {
+                    if (grid[indexInGrid[0], indexInGrid[1]].reservedByShip)
+                        grid[indexInGrid[0], indexInGrid[1]].ChangeColor(Color.red);
+                    else
+                        grid[indexInGrid[0], indexInGrid[1]].ChangeColor(Color.magenta);
+                    nowHightLighted.Add(indexInGrid);
+                }
+            }
+        }
+        if (Input.GetMouseButtonDown(1))
+            PlaceShip(ship);
     }
 
     /// <summary>
@@ -143,9 +169,9 @@ public class Grid : MonoBehaviour
                 {
                     grid[cell[0] + 1, cell[1]].reservedNearShip = true;
                     if (cell[1] < 9)
-                    grid[cell[0] + 1, cell[1] + 1].reservedNearShip = true;
+                        grid[cell[0] + 1, cell[1] + 1].reservedNearShip = true;
                     if (cell[1] > 0)
-                    grid[cell[0] + 1, cell[1] - 1].reservedNearShip = true;
+                        grid[cell[0] + 1, cell[1] - 1].reservedNearShip = true;
                 }
                 if (cell[0] > 0)
                 {
@@ -172,7 +198,7 @@ public class Grid : MonoBehaviour
                         grid[cell[0] - 1, cell[1] - 1].reservedNearShip = true;
                 }
                 grid[cell[0], cell[1]].reservedByShip = true;
-                grid[cell[0], cell[1]]._GO.GetComponent<Renderer>().material.color = Color.black;
+                grid[cell[0], cell[1]].ChangeColor(Color.black);
             }
             ships.Add(currentShip);
             if (ShipPlacedEvent != null)
@@ -181,43 +207,41 @@ public class Grid : MonoBehaviour
 
     }
 
-    
     /// <summary>
-    /// Check fitting ship to the grid
+    /// Calculate index in grid based on coords
     /// </summary>
-    /// <param name="ship">Current ship</param>
-    /// <param name="worldPosition">Position in world</param>
-    void checkFit(Ship ship, Vector3 worldPosition)
+    /// <param name="x">X coord</param>
+    /// <param name="y">Y coord</param>
+    /// <returns>Position on grid</returns>
+    private int coordToIndex(int x, int y)
     {
-        // bottom left coords of building in grid
-        Vector2 startCoords = worldPosition;
-        bool[] shipCells = ship.rotatedCells;
+        if (x >= 0 && y >= 0 && x < gridWidth && y < gridHeight)
+            return x  + (y * gridWidth);
+        else
+            return INVALID_CELL_IDX;
+    }
 
-        nowHightLighted.Clear();
-        // loop through building cells and see which cells are reserved in both building and grid
-        for (int y = 0; y < ship.height; y++)
-        {
-            for (int x = 0; x < ship.width; x++)
-            {
-                // this building cell matches this index in grid
+    /// <summary>
+    /// Calculate grid coords based on given index
+    /// </summary>
+    /// <param name="i">Index to calculate coords</param>
+    /// <returns>Vector2 coords</returns>
+    private Vector2 indexToCoord(int i)
+    {
+        if (i >= 0 && i < grid.Length)
+            return new Vector2(i % gridWidth, i / gridWidth);
+        else
+            return INVALID_COORDS;
+    }
 
-                int[] indexInGrid = { (int)(startCoords.y + y), (int)(startCoords.x + x) };
-                if (indexInGrid[0] == INVALID_CELL_IDX || indexInGrid[1] == INVALID_CELL_IDX)
-                    continue;
-
-                int indexInBuilding = ship.coordToIndex(x, y);
-
-                // if this index inside the building is reserved, check if the underlying grid cell is reserved
-                if (shipCells[indexInBuilding])
-                {
-                    grid[indexInGrid[0], indexInGrid[1]]._GO.GetComponent<Renderer>().material.color = grid[indexInGrid[0], indexInGrid[1]].reservedByShip ? Color.red : Color.magenta;
-                    nowHightLighted.Add(indexInGrid);                   
-                       
-                }
-            }
-        }
-        if (Input.GetMouseButtonDown(1))
-            PlaceShip(ship);
+    /// <summary>
+    /// CellMouseOver event handler. Tracing now hovering cell
+    /// </summary>
+    /// <param name="sender"></param>
+    /// <param name="e"></param>
+    public void OnCellMouseOver(object sender, MouseOverEventArgs e)
+    {
+        hooverCellPos = e.HooverPoint;
     }
 
     /// <summary>
@@ -231,185 +255,14 @@ public class Grid : MonoBehaviour
             {
                 // default coloring for reserved and free grid tiles
                 if (grid[i, j].reservedByShip)
-                    grid[i, j]._GO.GetComponent<Renderer>().material.color = Color.black;
+                    grid[i, j].ChangeColor(Color.black);
                 else if (grid[i, j].reservedNearShip)
-                    grid[i, j]._GO.GetComponent<Renderer>().material.color = Color.gray;
-                else grid[i, j]._GO.GetComponent<Renderer>().material.color = Color.white;
+                    grid[i, j].ChangeColor(Color.gray);
+                else grid[i, j].ChangeColor(Color.white);
             }
         }
     }
 
-    /// <summary>
-    /// Represents one cell on the grid
-    /// </summary>
-    public class GridCell
-    {
-        public bool reservedByShip;
-        public bool reservedNearShip;
-
-        public GameObject _GO;        
-
-        public GridCell(GameObject cube)
-        {
-            _GO = cube;
-        }
-    }
-
-    /// <summary>
-    /// Represents all the ships in game
-    /// </summary>
-    public class Ship
-    {
-        private const int ROT_0 = 0;
-        private const int ROT_90 = 1;
-        private const int ROT_COUNT = 2;
-
-        public int width;
-        public int height;
-        public int decks;
-
-        public ArrayList positionOnGrid;
-
-        private int rotation;
-        
-        protected bool[] ShipCells;
-
-        public Ship(int _decks)
-        {
-            width = _decks;
-            decks = _decks;
-            height = 1;
-            positionOnGrid = new ArrayList();
-            ShipCells = new bool[_decks];
-            for (int i = 0; i < _decks; i++)
-                ShipCells[i] = true;
-        }
-
-        public bool[] rotatedCells
-        {
-            get
-            {
-                return ShipCells;
-            }
-        }
-
-        /// <summary>
-        /// Rotate ship
-        /// </summary>
-        public void Rotate()
-        {
-            int tmp = height;
-            height = width;
-            width = tmp;
-        }
-
-        /// <summary>
-        /// Calculate index based on given x,y -coordinates
-        /// </summary>
-        /// <param name="x">X coord</param>
-        /// <param name="y">Y coord</param>
-        /// <returns>Index in ShipCells</returns>
-        public int coordToIndex(int x, int y)
-        {
-            if (x >= 0 && y >= 0 && x < width && y < height)
-                return x + (y * width);
-            else
-                return INVALID_CELL_IDX;
-        }
-    }
-
-    /// <summary>
-    /// Represents two-decked ships in game
-    /// </summary>
-    /*public class TwoDeckedShip : Ship
-    {
-        public TwoDeckedShip()
-        {
-            width = 2;
-            height = 1;
-            positionOnGrid = new ArrayList();
-            ShipCells = new bool[] { true, true };
-        }
-    }*/
-
-    /// <summary>
-    /// Represents three-decked ships in game
-    /// </summary>
-    /*public class ThreeDeckedShip : Ship
-    {       
-        // reserved status of building's cells in it's local space from bottom left to top right
-        
-        public ThreeDeckedShip()
-        {
-            width = 3;
-            height = 1;
-            positionOnGrid = new ArrayList();
-            ShipCells = new bool[] { true, true, true };
-        }
-    }*/
-
-    /*public class TwoDeckedShip
-    {
-        private const int ROT_0 = 0;
-        private const int ROT_90 = 1;
-        private const int ROT_190 = 0;
-        private const int ROT_270 = 1;
-        private const int ROT_COUNT = 2;
-
-        public const int WIDTH = 2;
-        public const int HEIGHT = 2;
-
-        public ArrayList positionOnGrid = new ArrayList();
-
-        private int rotation;
-        private int length;
-
-        // reserved status of building's cells in it's local space from bottom left to top right
-        private bool[][] _MyCells = new bool[][]{
-             //         bl   br   tl   tr
-             new bool[]{true,true,false,false},
-             new bool[]{false,true,false,true},
-             new bool[]{false,false,true,true},
-             new bool[]{true,false,true,false}
-         };
-
-
-        public bool[] rotatedCells
-        {
-            get
-            {
-                return _MyCells[rotation];
-            }
-        }
-
-        public TwoDeckedShip(int _length)
-        {
-        }
-
-        public void rotateRight()
-        {
-            rotation = ++rotation % ROT_COUNT;
-        }
-
-        public void rotateLeft()
-        {
-            if (--rotation < 0)
-                rotation += ROT_COUNT;
-        }
-
-        // calculate index based on given x,y -coordinates
-        public int coordToIndex(int x, int y)
-        {
-            if (x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT)
-                return x + (y * WIDTH);
-            else
-                return INVALID_CELL_IDX;
-        }
-    }*/    
-
-    public delegate void ShipPlacedEventHandler(object sender, ShipPlacedEventArgs e);
-
-    public event ShipPlacedEventHandler ShipPlacedEvent;
 }
 
 

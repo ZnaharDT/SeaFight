@@ -38,22 +38,22 @@ public class GameController : MonoBehaviour {
 
     public void OnOneDeckedButtonClick()
     {
-        playerGrid.CurrentShip = new Grid.Ship(1);
+        playerGrid.CurrentShip = new Ship(1);
     }
 
     public void OnTwoDeckedButtonClick()
     {
-        playerGrid.CurrentShip = new Grid.Ship(2);
+        playerGrid.CurrentShip = new Ship(2);
     }
 
     public void OnThreeDeckedButtonClick()
     {
-        playerGrid.CurrentShip = new Grid.Ship(3);
+        playerGrid.CurrentShip = new Ship(3);
     }
 
     public void OnFourDeckedButtonClick()
     {
-        playerGrid.CurrentShip = new Grid.Ship(4);
+        playerGrid.CurrentShip = new Ship(4);
     }
     public void OnShipPlaced(object sender, ShipPlacedEventArgs e)
     {
@@ -88,7 +88,7 @@ public class GameController : MonoBehaviour {
                 break;
             case 4:
                 FourDeckedCount--;
-                FourDeckedButton.GetComponentInChildren<Text>().text = "3 - decked Left: " + FourDeckedCount.ToString();
+                FourDeckedButton.GetComponentInChildren<Text>().text = "4 - decked Left: " + FourDeckedCount.ToString();
                 if (FourDeckedCount <= 0)
                 {
                     playerGrid.CurrentShip = null;
