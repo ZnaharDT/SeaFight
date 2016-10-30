@@ -3,9 +3,18 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using UnityEngine.UI;
 
-namespace Assets.Scripts
+namespace SeaBattle
 {
+    public interface ISeaBattleRules
+    {
+        int OneDeckedCount { get; set; }
+        int TwoDeckedCount  { get; set; }
+        int ThreeDeckedCount { get; set; }
+        int FourDeckedCount { get; set; }
+    }
+
     public class ShipPlacedEventArgs : EventArgs
     {
         public int decks;
@@ -53,8 +62,31 @@ namespace Assets.Scripts
 
         public GridPoint(int _i, int _j)
         {
-            i = _i;
-            j = _j;
+            if (_i >= 10 || _j >= 10)
+            {
+                i = -1;
+                j = -1;
+            }
+            else
+            {
+                i = _i;
+                j = _j;
+            }
+        }
+
+        public static bool operator ==(GridPoint p1, GridPoint p2)
+        {
+            if (p1.i == p2.i)
+                if (p1.j == p2.j)
+                    return true;
+            return false;
+        }
+        public static bool operator !=(GridPoint p1, GridPoint p2)
+        {
+            if (p1.i != p2.i)
+                if (p1.j != p2.j)
+                    return true;
+            return false;
         }
     }
 
@@ -71,7 +103,7 @@ namespace Assets.Scripts
         public int height;
         public int decks;
 
-        public ArrayList positionOnGrid;
+        private ArrayList positionOnGrid;
 
         private int rotation;
 
@@ -86,7 +118,7 @@ namespace Assets.Scripts
             width = _decks;
             decks = _decks;
             height = 1;
-            positionOnGrid = new ArrayList();
+            PositionOnGrid = new ArrayList();
             ShipCells = new bool[_decks];
             for (int i = 0; i < _decks; i++)
                 ShipCells[i] = true;
@@ -97,6 +129,19 @@ namespace Assets.Scripts
             get
             {
                 return ShipCells;
+            }
+        }
+
+        public ArrayList PositionOnGrid
+        {
+            get
+            {
+                return positionOnGrid;
+            }
+
+            set
+            {
+                positionOnGrid = value;
             }
         }
 
@@ -122,6 +167,37 @@ namespace Assets.Scripts
                 return x + (y * width);
             else
                 return -1; ;
+        }
+    }
+    
+    [Serializable]
+    public class PlayersData
+    {
+        public List<Player> players = new List<Player>();
+    }
+
+    [Serializable]
+    public class Player
+    {
+        private string name = "";
+        private int score = 0;
+
+        public Player(string _name)
+        {
+            name = _name;
+        }
+
+        public int Score
+        {
+            get
+            {
+                return score;
+            }
+
+            set
+            {
+                score = value;
+            }
         }
     }
 }

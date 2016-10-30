@@ -1,33 +1,36 @@
 ﻿using UnityEngine;
 using System.Collections;
 using UnityEngine.UI;
-using Assets.Scripts;
+using SeaBattle;
 
-public class GameController : MonoBehaviour {
+public class GameController : MonoBehaviour {   
 
-    public Button OneDeckedButton;
-    public Button TwoDeckedButton;
-    public Button ThreeDeckedButton;
-    public Button FourDeckedButton;
-    
-    private int OneDeckedCount = 4;
-    private int TwoDeckedCount = 3;
-    private int ThreeDeckedCount = 2;
-    private int FourDeckedCount = 1;
+    public GameObject firstPlayerField;
+    public GameObject secondPlayerField;
+    public GameObject userInterface;
 
-    public GameObject playerField;
-    private Grid playerGrid;
+    private Grid activePlayerGrid;
+    private Grid firstPlayerGrid;
+    private Grid secondPlayerGrid;
+
+    private UIController uiController;
+
+    void Awake()
+    {
+        activePlayerGrid = firstPlayerField.GetComponent<Grid>();
+        activePlayerGrid.ShipPlacedEvent += OnShipPlaced;
+        uiController = userInterface.GetComponent<UIController>();
+    }
 
     // Use this for initialization
     void Start ()
     {
-        OneDeckedButton.GetComponentInChildren<Text>().text = "1 - decked Left: 4";
-        TwoDeckedButton.GetComponentInChildren<Text>().text = "2 - decked Left: 3";
-        ThreeDeckedButton.GetComponentInChildren<Text>().text = "3 - decked Left: 2";
-        FourDeckedButton.GetComponentInChildren<Text>().text = "4 - decked Left: 1";
-        playerField = GameObject.Find("Grid");
-        playerGrid = playerField.GetComponent<Grid>();
-        playerGrid.ShipPlacedEvent += OnShipPlaced;
+        uiController.FinishButton.interactable = false;
+        uiController.OneDeckedLeft.GetComponent<Text>().text = "Left: " + activePlayerGrid.OneDeckedCount;
+        uiController.TwoDeckedLeft.GetComponent<Text>().text = "Left: " + activePlayerGrid.TwoDeckedCount;
+        uiController.ThreeDeckedLeft.GetComponent<Text>().text = "Left: " + activePlayerGrid.ThreeDeckedCount;
+        uiController.FourDeckedLeft.GetComponent<Text>().text = "Left: " + activePlayerGrid.FourDeckedCount;
+        OnRandom();
     }
 
     // Update is called once per frame
@@ -36,63 +39,114 @@ public class GameController : MonoBehaviour {
 	
 	}
 
+    private void SwitchPlayer()
+    {
+        if (activePlayerGrid.Equals(firstPlayerGrid))
+            activePlayerGrid = secondPlayerGrid;
+        else
+            activePlayerGrid = firstPlayerGrid;
+    }
+
+    public void OnRandom()
+    {
+        activePlayerGrid.RandomShipPlacing();
+    }
+
+    public void OnClear()
+    {
+        uiController.OneDeckedButton.interactable = true;
+        uiController.TwoDeckedButton.interactable = true;
+        uiController.ThreeDeckedButton.interactable = true;
+        uiController.FourDeckedButton.interactable = true;
+        uiController.FinishButton.interactable = false;
+
+        activePlayerGrid.ClearGrid();
+
+        uiController.OneDeckedLeft.text = "Left: " + activePlayerGrid.OneDeckedCount.ToString();
+        uiController.TwoDeckedLeft.text = "Left: " + activePlayerGrid.TwoDeckedCount.ToString();
+        uiController.ThreeDeckedLeft.text = "Left: " + activePlayerGrid.ThreeDeckedCount.ToString();
+        uiController.FourDeckedLeft.text = "Left: " + activePlayerGrid.FourDeckedCount.ToString();
+    }
+
+    public void OnFinish()
+    {
+
+    }
+
     public void OnOneDeckedButtonClick()
     {
-        playerGrid.CurrentShip = new Ship(1);
+        activePlayerGrid.CurrentShip = new Ship(1);
     }
 
     public void OnTwoDeckedButtonClick()
     {
-        playerGrid.CurrentShip = new Ship(2);
+        activePlayerGrid.CurrentShip = new Ship(2);
     }
 
     public void OnThreeDeckedButtonClick()
     {
-        playerGrid.CurrentShip = new Ship(3);
+        activePlayerGrid.CurrentShip = new Ship(3);
     }
 
     public void OnFourDeckedButtonClick()
     {
-        playerGrid.CurrentShip = new Ship(4);
+        activePlayerGrid.CurrentShip = new Ship(4);
     }
+
     public void OnShipPlaced(object sender, ShipPlacedEventArgs e)
     {
         switch (e.decks)
         {
             case 1:
-                OneDeckedCount--;
-                OneDeckedButton.GetComponentInChildren<Text>().text = "2 - decked Left: " + OneDeckedCount.ToString();
-                if (OneDeckedCount <= 0)
+                activePlayerGrid.OneDeckedCount--;
+                uiController.OneDeckedLeft.GetComponent<Text>().text = "Left: " + activePlayerGrid.OneDeckedCount.ToString();
+                if (activePlayerGrid.OneDeckedCount <= 0)
                 {
-                    playerGrid.CurrentShip = null;
-                    OneDeckedButton.interactable = false;
+                    if (activePlayerGrid.TwoDeckedCount <= 0
+                        && activePlayerGrid.ThreeDeckedCount <= 0
+                        && activePlayerGrid.FourDeckedCount <= 0)
+                        uiController.FinishButton.interactable = true;
+                    activePlayerGrid.CurrentShip = null;
+                    uiController.OneDeckedButton.interactable = false;
                 }
                 break;
             case 2:
-                TwoDeckedCount--;
-                TwoDeckedButton.GetComponentInChildren<Text>().text = "2 - decked Left: " + TwoDeckedCount.ToString();
-                if (TwoDeckedCount <= 0)
+                activePlayerGrid.TwoDeckedCount--;
+                uiController.TwoDeckedLeft.GetComponent<Text>().text = "Left: " + activePlayerGrid.TwoDeckedCount.ToString();
+                if (activePlayerGrid.TwoDeckedCount <= 0)
                 {
-                    playerGrid.CurrentShip = null;
-                    TwoDeckedButton.interactable = false;
+                    if (activePlayerGrid.OneDeckedCount <= 0
+                        && activePlayerGrid.ThreeDeckedCount <= 0
+                        && activePlayerGrid.FourDeckedCount <= 0)
+                        uiController.FinishButton.interactable = true;
+                    activePlayerGrid.CurrentShip = null;
+                    uiController.TwoDeckedButton.interactable = false;
                 }
                 break;
             case 3:
-                ThreeDeckedCount--;
-                ThreeDeckedButton.GetComponentInChildren<Text>().text = "3 - decked Left: " + ThreeDeckedCount.ToString();
-                if (ThreeDeckedCount <= 0)
+                activePlayerGrid.ThreeDeckedCount--;
+                uiController.ThreeDeckedLeft.GetComponent<Text>().text = "Left: " + activePlayerGrid.ThreeDeckedCount.ToString();
+                if (activePlayerGrid.ThreeDeckedCount <= 0)
                 {
-                    playerGrid.CurrentShip = null;
-                    ThreeDeckedButton.interactable = false;
+                    if (activePlayerGrid.OneDeckedCount <= 0
+                        && activePlayerGrid.TwoDeckedCount <= 0
+                        && activePlayerGrid.FourDeckedCount <= 0)
+                        uiController.FinishButton.interactable = true;
+                    activePlayerGrid.CurrentShip = null;
+                    uiController.ThreeDeckedButton.interactable = false;
                 }
                 break;
             case 4:
-                FourDeckedCount--;
-                FourDeckedButton.GetComponentInChildren<Text>().text = "4 - decked Left: " + FourDeckedCount.ToString();
-                if (FourDeckedCount <= 0)
+                activePlayerGrid.FourDeckedCount--;
+                uiController.FourDeckedLeft.GetComponent<Text>().text = "Left: " + activePlayerGrid.FourDeckedCount.ToString();
+                if (activePlayerGrid.FourDeckedCount <= 0)
                 {
-                    playerGrid.CurrentShip = null;
-                    FourDeckedButton.interactable = false;
+                    if (activePlayerGrid.OneDeckedCount <= 0
+                        && activePlayerGrid.TwoDeckedCount <= 0
+                        && activePlayerGrid.ThreeDeckedCount <= 0)
+                        uiController.FinishButton.interactable = true;
+                    activePlayerGrid.CurrentShip = null;
+                    uiController.FourDeckedButton.interactable = false;
                 }
                 break;
         }

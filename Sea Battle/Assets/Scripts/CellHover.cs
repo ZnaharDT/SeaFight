@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections;
 using Assets.Scripts;
+using SeaBattle;
 
 public class CellHover : MonoBehaviour {
 

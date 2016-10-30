@@ -3,8 +3,10 @@ using System.Collections;
 using System;
 using UnityEngine.UI;
 using Assets.Scripts;
+using SeaBattle;
+using System.Collections.Generic;
 
-public class Grid : MonoBehaviour
+public class Grid : MonoBehaviour, ISeaBattleRules
 {
     static readonly Vector2 INVALID_COORDS = new Vector2(-1, -1);
     static readonly GridPoint INVALID_CELL_POS = new GridPoint(-1, -1);
@@ -22,7 +24,7 @@ public class Grid : MonoBehaviour
     private Ship currentShip;
     private int lastMouseIdx;
     private ArrayList nowHightLighted = new ArrayList();
-    private ArrayList ships = new ArrayList();
+    private List<Ship> ships = new List<Ship>();
 
     public Ship CurrentShip
     {
@@ -50,38 +52,59 @@ public class Grid : MonoBehaviour
         }
     }
 
+    public int OneDeckedCount { get; set; }
+
+    public int TwoDeckedCount { get; set; }
+
+    public int ThreeDeckedCount { get; set; }
+
+    public int FourDeckedCount { get; set; }
+
     public delegate void ShipPlacedEventHandler(object sender, ShipPlacedEventArgs e);
+
     public event ShipPlacedEventHandler ShipPlacedEvent;
+
+    void Awake()
+    {
+    }
 
     void Start()
     {
+
         // create a grid of "GridCell" cubes
-        grid = new GridCell[gridWidth,gridHeight];
+        OneDeckedCount = 4;
+        TwoDeckedCount = 3;
+        ThreeDeckedCount = 2;
+        FourDeckedCount = 1;
+
+        grid = new GridCell[gridWidth, gridHeight];
         for (int i = 0; i < gridHeight; i++)
         {
             for (int j = 0; j < gridWidth; j++)
             {
-                GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Quad);
                 cube.transform.parent = transform;
                 cube.transform.localPosition = new Vector2(j * coordsMultiplier, i * coordsMultiplier);
                 cube.transform.localScale = Vector3.one * cubeSize;
+                cube.tag = "grid_cell";
                 cube.AddComponent<CellHover>().position = new GridPoint(i, j);
 
                 grid[i, j] = new GridCell(cube);
             }
         }
-        
+
+        //RandomShipPlacing();
         // set colors for first time drawing
-        resetHighlighting();
+        ResetHighlighting();
         // make a default dragged building
-        currentShip = new Ship(4);
+        currentShip = null;
     }
 
     void Update()
     {
         if (currentShip == null)
         {
-            resetHighlighting();
+            ResetHighlighting();
             return;
         }
         if (Input.GetMouseButtonDown(0))
@@ -91,7 +114,100 @@ public class Grid : MonoBehaviour
         }      
         ShipPositionHighlighting();              
     }
-    
+
+    private List<GridPoint> GetFreeCells()
+    {
+        List<GridPoint> freeCells = new List<GridPoint>();
+        for (int i = 0; i < grid.GetLength(0); i++)
+            for (int j = 0; j < grid.GetLength(1); j++)
+                if (!grid[i, j].reservedByShip || !grid[i, j].reservedNearShip)
+                    freeCells.Add(new GridPoint(i, j));
+        return freeCells;
+    }
+
+    public void RandomShipPlacing()
+    {
+        int fourDeckedCount = 1, threeDeckedCount = 2, twoDeckedCount = 3, oneDeckedCount = 4;
+        ClearGrid();
+
+        bool shipAdded = false;
+        for (int i = 0; i < oneDeckedCount; i++)
+        {
+            shipAdded = false;
+            while (!shipAdded)
+            {
+                List<GridPoint> randomRange = GetFreeCells();
+                shipAdded = CheckFitRandom(new Ship(1), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
+            }
+        }
+        for (int i = 0; i < twoDeckedCount; i++)
+        {
+            shipAdded = false;
+            while (!shipAdded)
+            {
+                List<GridPoint> randomRange = GetFreeCells();
+                shipAdded = CheckFitRandom(new Ship(2), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
+            }
+        }
+        for (int i = 0; i < threeDeckedCount; i++)
+        {
+            shipAdded = false;
+            while (!shipAdded)
+            {
+                List<GridPoint> randomRange = GetFreeCells();
+                shipAdded = CheckFitRandom(new Ship(3), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
+            }
+        }
+        for (int i = 0; i < fourDeckedCount; i++)
+        {
+            shipAdded = false;
+            while (!shipAdded)
+            {
+                List<GridPoint> randomRange = GetFreeCells();
+                shipAdded = CheckFitRandom(new Ship(4), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
+            }
+        }
+
+        ResetHighlighting();
+    }
+
+    bool CheckFitRandom(Ship ship, GridPoint cellPos)
+    {
+        bool[] shipCells = ship.rotatedCells;
+
+        nowHightLighted.Clear();
+        //GridPoint cellPos = new GridPoint(UnityEngine.Random.Range(0, gridHeight), UnityEngine.Random.Range(0, gridWidth));
+        int rotate = UnityEngine.Random.Range(0, 2);
+        if (rotate == 1)
+            ship.Rotate();
+
+        // loop through building cells and see which cells are reserved in both building and grid
+        for (int y = 0; y < ship.height; y++)
+        {
+            for (int x = 0; x < ship.width; x++)
+            {
+                // this building cell matches this index in grid
+
+                GridPoint indexInGrid = new GridPoint( cellPos.i + y, cellPos.j + x );
+                if (indexInGrid == INVALID_CELL_POS)
+                    return false;
+
+                int indexInBuilding = ship.coordToIndex(x, y);
+
+                // if this index inside the building is reserved, check if the underlying grid cell is reserved
+                if (shipCells[indexInBuilding])
+                {
+                    if (grid[indexInGrid.i, indexInGrid.j].reservedByShip)
+                        grid[indexInGrid.i, indexInGrid.j].ChangeColor(Color.red);
+                    else
+                        grid[indexInGrid.i, indexInGrid.j].ChangeColor(Color.magenta);
+                    nowHightLighted.Add(indexInGrid);
+                }
+            }
+        }
+        return PlaceShip(ship);
+    }
+
     /// <summary>
     /// Highlights position to place ship
     /// </summary>
@@ -105,8 +221,8 @@ public class Grid : MonoBehaviour
         // only check if hovered cell is valid and changed 
         if (hooverCellPos != INVALID_CELL_POS)
         {
-            resetHighlighting();
-            checkFit(currentShip, cursorWorldPos);
+            ResetHighlighting();
+            CheckFit(currentShip);
         }
     }
 
@@ -114,11 +230,10 @@ public class Grid : MonoBehaviour
     /// Check fitting ship to the grid
     /// </summary>
     /// <param name="ship">Current ship</param>
-    /// <param name="worldPosition">Position in world</param>
-    void checkFit(Ship ship, Vector3 worldPosition)
+    void CheckFit(Ship ship)
     {
         // bottom left coords of building in grid
-        Vector2 startCoords = worldPosition;
+        //Vector2 startCoords = worldPosition;
         bool[] shipCells = ship.rotatedCells;
 
         nowHightLighted.Clear();
@@ -129,8 +244,8 @@ public class Grid : MonoBehaviour
             {
                 // this building cell matches this index in grid
 
-                int[] indexInGrid = { hooverCellPos.i + y, hooverCellPos.j + x };
-                if (indexInGrid[0] == INVALID_CELL_IDX || indexInGrid[1] == INVALID_CELL_IDX)
+                GridPoint indexInGrid = new GridPoint(hooverCellPos.i + y, hooverCellPos.j + x);
+                if (indexInGrid == INVALID_CELL_POS)
                     continue;
 
                 int indexInBuilding = ship.coordToIndex(x, y);
@@ -138,10 +253,10 @@ public class Grid : MonoBehaviour
                 // if this index inside the building is reserved, check if the underlying grid cell is reserved
                 if (shipCells[indexInBuilding])
                 {
-                    if (grid[indexInGrid[0], indexInGrid[1]].reservedByShip)
-                        grid[indexInGrid[0], indexInGrid[1]].ChangeColor(Color.red);
+                    if (grid[indexInGrid.i, indexInGrid.j].reservedByShip)
+                        grid[indexInGrid.i, indexInGrid.j].ChangeColor(Color.red);
                     else
-                        grid[indexInGrid[0], indexInGrid[1]].ChangeColor(Color.magenta);
+                        grid[indexInGrid.i, indexInGrid.j].ChangeColor(Color.magenta);
                     nowHightLighted.Add(indexInGrid);
                 }
             }
@@ -153,58 +268,60 @@ public class Grid : MonoBehaviour
     /// <summary>
     /// Placing current ship on grid
     /// </summary>
-    private void PlaceShip(Ship currentShip)
+    private bool PlaceShip(Ship currentShip)
     {
         bool rightPlace = true;
-        foreach (int[] cell in nowHightLighted)
-            if (grid[cell[0], cell[1]].reservedByShip || grid[cell[0], cell[1]].reservedNearShip)
+        foreach (GridPoint cell in nowHightLighted)
+            if (grid[cell.i, cell.j].reservedByShip || grid[cell.i, cell.j].reservedNearShip)
                 rightPlace = false;
         if (rightPlace)
-        {
-            //currentShip = new TwoDeckedShip();            
-            foreach (int[] cell in nowHightLighted)
+        {                
+            foreach (GridPoint cell in nowHightLighted)
             {
-                currentShip.positionOnGrid.Add(cell);
-                if (cell[0] < 9)
+                currentShip.PositionOnGrid.Add(cell);
+                if (cell.i < 9)
                 {
-                    grid[cell[0] + 1, cell[1]].reservedNearShip = true;
-                    if (cell[1] < 9)
-                        grid[cell[0] + 1, cell[1] + 1].reservedNearShip = true;
-                    if (cell[1] > 0)
-                        grid[cell[0] + 1, cell[1] - 1].reservedNearShip = true;
+                    grid[cell.i + 1, cell.j].reservedNearShip = true;
+                    if (cell.j < 9)
+                        grid[cell.i + 1, cell.j + 1].reservedNearShip = true;
+                    if (cell.j > 0)
+                        grid[cell.i + 1, cell.j - 1].reservedNearShip = true;
                 }
-                if (cell[0] > 0)
+                if (cell.i > 0)
                 {
-                    grid[cell[0] - 1, cell[1]].reservedNearShip = true;
-                    if (cell[1] < 9)
-                        grid[cell[0] - 1, cell[1] + 1].reservedNearShip = true;
-                    if (cell[1] > 0)
-                        grid[cell[0] - 1, cell[1] - 1].reservedNearShip = true;
+                    grid[cell.i - 1, cell.j].reservedNearShip = true;
+                    if (cell.j < 9)
+                        grid[cell.i - 1, cell.j + 1].reservedNearShip = true;
+                    if (cell.j > 0)
+                        grid[cell.i - 1, cell.j - 1].reservedNearShip = true;
                 }
-                if (cell[1] < 9)
+                if (cell.j < 9)
                 {
-                    grid[cell[0], cell[1] + 1].reservedNearShip = true;
-                    if (cell[0] < 9)
-                        grid[cell[0] + 1, cell[1] + 1].reservedNearShip = true;
-                    if (cell[0] > 0)
-                        grid[cell[0] - 1, cell[1] + 1].reservedNearShip = true;
+                    grid[cell.i, cell.j + 1].reservedNearShip = true;
+                    if (cell.i < 9)
+                        grid[cell.i + 1, cell.j + 1].reservedNearShip = true;
+                    if (cell.i > 0)
+                        grid[cell.i - 1, cell.j + 1].reservedNearShip = true;
                 }
-                if (cell[1] > 0)
+                if (cell.j > 0)
                 {
-                    grid[cell[0], cell[1] - 1].reservedNearShip = true;
-                    if (cell[0] < 9)
-                        grid[cell[0] + 1, cell[1] - 1].reservedNearShip = true;
-                    if (cell[0] > 0)
-                        grid[cell[0] - 1, cell[1] - 1].reservedNearShip = true;
+                    grid[cell.i, cell.j - 1].reservedNearShip = true;
+                    if (cell.i < 9)
+                        grid[cell.i + 1, cell.j - 1].reservedNearShip = true;
+                    if (cell.i > 0)
+                        grid[cell.i - 1, cell.j - 1].reservedNearShip = true;
                 }
-                grid[cell[0], cell[1]].reservedByShip = true;
-                grid[cell[0], cell[1]].ChangeColor(Color.black);
+                grid[cell.i, cell.j].reservedByShip = true;
+                grid[cell.i, cell.j].ChangeColor(Color.black);
             }
+
+            currentShip.PositionOnGrid.AddRange(nowHightLighted);
             ships.Add(currentShip);
+            
             if (ShipPlacedEvent != null)
                 ShipPlacedEvent(this, new ShipPlacedEventArgs(currentShip.decks));
         }
-
+        return rightPlace;
     }
 
     /// <summary>
@@ -213,7 +330,7 @@ public class Grid : MonoBehaviour
     /// <param name="x">X coord</param>
     /// <param name="y">Y coord</param>
     /// <returns>Position on grid</returns>
-    private int coordToIndex(int x, int y)
+    private int CoordToIndex(int x, int y)
     {
         if (x >= 0 && y >= 0 && x < gridWidth && y < gridHeight)
             return x  + (y * gridWidth);
@@ -226,7 +343,7 @@ public class Grid : MonoBehaviour
     /// </summary>
     /// <param name="i">Index to calculate coords</param>
     /// <returns>Vector2 coords</returns>
-    private Vector2 indexToCoord(int i)
+    private Vector2 IndexToCoord(int i)
     {
         if (i >= 0 && i < grid.Length)
             return new Vector2(i % gridWidth, i / gridWidth);
@@ -247,7 +364,7 @@ public class Grid : MonoBehaviour
     /// <summary>
     /// Refresh all the colors on the grid
     /// </summary>
-    void resetHighlighting()
+    void ResetHighlighting()
     {
         for (int i = 0; i < grid.GetLength(0); i++)
         {
@@ -263,6 +380,25 @@ public class Grid : MonoBehaviour
         }
     }
 
+    public void ClearGrid()
+    {
+        OneDeckedCount = 4;
+        TwoDeckedCount = 3;
+        ThreeDeckedCount = 2;
+        FourDeckedCount = 1;
+
+        for (int i = 0; i < gridHeight; i++)
+        {
+            for (int j = 0; j < gridWidth; j++)
+            {
+                grid[i, j].reservedByShip = false;
+                grid[i, j].reservedNearShip = false;
+            }
+        }
+        ResetHighlighting();
+        ships = new List<Ship>();
+        currentShip = null;
+    }
 }
 
 
