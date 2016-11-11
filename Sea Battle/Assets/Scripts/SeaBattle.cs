@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using UnityEngine;
 using UnityEngine.UI;
 
 namespace SeaBattle
@@ -33,17 +34,17 @@ namespace SeaBattle
         }
     }
 
-    public class MouseOverEventArgs : EventArgs
+    public class MouseActionEventArgs : EventArgs
     {
 
         private GridPoint point;
 
-        public MouseOverEventArgs(GridPoint _point)
+        public MouseActionEventArgs(GridPoint _point)
         {
             this.point = _point;
         }
 
-        public GridPoint HooverPoint
+        public GridPoint Point
         {
             get
             {
@@ -57,6 +58,27 @@ namespace SeaBattle
     /// </summary>
     public class GridPoint
     {
+        protected bool Equals(GridPoint other)
+        {
+            return i == other.i && j == other.j;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj.GetType() != this.GetType()) return false;
+            return Equals((GridPoint) obj);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                return (i*397) ^ j;
+            }
+        }
+
         public int i;
         public int j;
 
@@ -103,7 +125,8 @@ namespace SeaBattle
         public int height;
         public int decks;
 
-        private ArrayList positionOnGrid;
+        private List<GridPoint> positionOnGrid;
+        public List<GridCell> NearShipCells { get; private set; }
 
         private int rotation;
 
@@ -118,8 +141,9 @@ namespace SeaBattle
             width = _decks;
             decks = _decks;
             height = 1;
-            PositionOnGrid = new ArrayList();
+            PositionOnGrid = new List<GridPoint>();
             ShipCells = new bool[_decks];
+            NearShipCells = new List<GridCell>();
             for (int i = 0; i < _decks; i++)
                 ShipCells[i] = true;
         }
@@ -132,7 +156,7 @@ namespace SeaBattle
             }
         }
 
-        public ArrayList PositionOnGrid
+        public List<GridPoint> PositionOnGrid
         {
             get
             {
@@ -168,6 +192,21 @@ namespace SeaBattle
             else
                 return -1; ;
         }
+
+        public void Hit(GridPoint ePoint)
+        {
+            positionOnGrid.Remove(ePoint);
+            if (positionOnGrid.Count == 0)
+                DestroyShip();
+        }
+
+        private void DestroyShip()
+        {
+            foreach (var cell in NearShipCells)
+            {
+                cell.ChangeColor(Color.cyan);
+            }
+        }
     }
     
     [Serializable]
@@ -177,14 +216,21 @@ namespace SeaBattle
     }
 
     [Serializable]
-    public class Player
+    public abstract class Player
     {
-        private string name = "";
+        public string Name { get; set; }      
+        public Grid PlayerGrid { get; set; }
+
+        public abstract void RequestShoot();
+    }
+
+    public class HumanPlayer : Player
+    {
         private int score = 0;
 
-        public Player(string _name)
+        public HumanPlayer(string _name)
         {
-            name = _name;
+            Name = _name;
         }
 
         public int Score
@@ -199,5 +245,32 @@ namespace SeaBattle
                 score = value;
             }
         }
+
+        public override void RequestShoot()
+        {
+
+        }
+    }
+
+    public class AIPlayer : Player
+    {
+        public AIPlayer()
+        {
+            Name = "AI Player";
+        }
+
+        public override void RequestShoot()
+        {
+
+        }
+    }
+
+    public enum CellState
+    {
+        ReservedByShip,
+        ReservedNearShip,
+        ShootedShip,
+        Empty,
+        EmptyShooted
     }
 }

@@ -5,7 +5,7 @@ using SeaBattle;
 
 public class CellHover : MonoBehaviour {
 
-    public delegate void MouseOverEventHandler(object sender, MouseOverEventArgs e);
+    public delegate void MouseOverEventHandler(object sender, MouseActionEventArgs e);
     public event MouseOverEventHandler MouseOverEvent;
 
     public GridPoint position;
@@ -23,6 +23,8 @@ public class CellHover : MonoBehaviour {
     void OnMouseOver()
     {
         if (MouseOverEvent != null)
-            MouseOverEvent(this, new MouseOverEventArgs(position));
+            MouseOverEvent(this, new MouseActionEventArgs(position));
     }
+
+   
 }

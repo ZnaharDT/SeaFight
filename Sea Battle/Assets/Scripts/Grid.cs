@@ -5,52 +5,28 @@ using UnityEngine.UI;
 using Assets.Scripts;
 using SeaBattle;
 using System.Collections.Generic;
+using System.Linq;
 
 public class Grid : MonoBehaviour, ISeaBattleRules
-{
+{    
     static readonly Vector2 INVALID_COORDS = new Vector2(-1, -1);
     static readonly GridPoint INVALID_CELL_POS = new GridPoint(-1, -1);
-    const int INVALID_CELL_IDX = -1;
+    static readonly int INVALID_CELL_IDX = -1;
 
     public float cubeSize = 0.9f;
     public float coordsMultiplier = 0.9f;
     public int gridWidth;
     public int gridHeight;
 
-    private int cursorState;
-
-    GridPoint hooverCellPos = new GridPoint(-1, -1);
+    private GridPoint hooverCellPos = new GridPoint(-1, -1);
     private GridCell[,] grid;
-    private Ship currentShip;
     private int lastMouseIdx;
-    private ArrayList nowHightLighted = new ArrayList();
+    private List<GridPoint> nowHightLighted = new List<GridPoint>();
     private List<Ship> ships = new List<Ship>();
 
-    public Ship CurrentShip
-    {
-        get
-        {
-            return currentShip;
-        }
+    public Ship CurrentShip { get; set; }
 
-        set
-        {
-            currentShip = value;
-        }
-    }
-
-    public int CursorState
-    {
-        get
-        {
-            return cursorState;
-        }
-
-        set
-        {
-            cursorState = value;
-        }
-    }
+    public int CursorState { get; set; }
 
     public int OneDeckedCount { get; set; }
 
@@ -89,7 +65,7 @@ public class Grid : MonoBehaviour, ISeaBattleRules
                 cube.tag = "grid_cell";
                 cube.AddComponent<CellHover>().position = new GridPoint(i, j);
 
-                grid[i, j] = new GridCell(cube);
+                grid[i, j] = new GridCell(cube, new GridPoint(i, j));
             }
         }
 
@@ -97,22 +73,22 @@ public class Grid : MonoBehaviour, ISeaBattleRules
         // set colors for first time drawing
         ResetHighlighting();
         // make a default dragged building
-        currentShip = null;
+        CurrentShip = null;
     }
 
     void Update()
     {
-        if (currentShip == null)
+        if (CurrentShip != null)
         {
             ResetHighlighting();
+            ShipPositionHighlighting();
             return;
         }
-        if (Input.GetMouseButtonDown(0))
+        if (Input.GetMouseButtonDown(0) && CurrentShip != null)
         {
-            currentShip.Rotate();
+            CurrentShip.Rotate();
             lastMouseIdx = INVALID_CELL_IDX;
-        }      
-        ShipPositionHighlighting();              
+        }
     }
 
     private List<GridPoint> GetFreeCells()
@@ -120,7 +96,7 @@ public class Grid : MonoBehaviour, ISeaBattleRules
         List<GridPoint> freeCells = new List<GridPoint>();
         for (int i = 0; i < grid.GetLength(0); i++)
             for (int j = 0; j < grid.GetLength(1); j++)
-                if (!grid[i, j].reservedByShip || !grid[i, j].reservedNearShip)
+                if (grid[i,j].State == CellState.Empty)
                     freeCells.Add(new GridPoint(i, j));
         return freeCells;
     }
@@ -167,7 +143,7 @@ public class Grid : MonoBehaviour, ISeaBattleRules
                 shipAdded = CheckFitRandom(new Ship(4), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
             }
         }
-
+       
         ResetHighlighting();
     }
 
@@ -197,7 +173,7 @@ public class Grid : MonoBehaviour, ISeaBattleRules
                 // if this index inside the building is reserved, check if the underlying grid cell is reserved
                 if (shipCells[indexInBuilding])
                 {
-                    if (grid[indexInGrid.i, indexInGrid.j].reservedByShip)
+                    if (grid[indexInGrid.i, indexInGrid.j].State == CellState.ReservedByShip)
                         grid[indexInGrid.i, indexInGrid.j].ChangeColor(Color.red);
                     else
                         grid[indexInGrid.i, indexInGrid.j].ChangeColor(Color.magenta);
@@ -222,7 +198,7 @@ public class Grid : MonoBehaviour, ISeaBattleRules
         if (hooverCellPos != INVALID_CELL_POS)
         {
             ResetHighlighting();
-            CheckFit(currentShip);
+            CheckFit(CurrentShip);
         }
     }
 
@@ -246,19 +222,18 @@ public class Grid : MonoBehaviour, ISeaBattleRules
 
                 GridPoint indexInGrid = new GridPoint(hooverCellPos.i + y, hooverCellPos.j + x);
                 if (indexInGrid == INVALID_CELL_POS)
-                    continue;
+                    return;
 
                 int indexInBuilding = ship.coordToIndex(x, y);
 
                 // if this index inside the building is reserved, check if the underlying grid cell is reserved
-                if (shipCells[indexInBuilding])
-                {
-                    if (grid[indexInGrid.i, indexInGrid.j].reservedByShip)
-                        grid[indexInGrid.i, indexInGrid.j].ChangeColor(Color.red);
-                    else
-                        grid[indexInGrid.i, indexInGrid.j].ChangeColor(Color.magenta);
-                    nowHightLighted.Add(indexInGrid);
-                }
+                if (!shipCells[indexInBuilding])
+                    continue;
+                grid[indexInGrid.i, indexInGrid.j].ChangeColor(grid[indexInGrid.i, indexInGrid.j].State ==
+                                                               CellState.ReservedByShip
+                    ? Color.red
+                    : Color.magenta);
+                nowHightLighted.Add(indexInGrid);
             }
         }
         if (Input.GetMouseButtonDown(1))
@@ -272,46 +247,98 @@ public class Grid : MonoBehaviour, ISeaBattleRules
     {
         bool rightPlace = true;
         foreach (GridPoint cell in nowHightLighted)
-            if (grid[cell.i, cell.j].reservedByShip || grid[cell.i, cell.j].reservedNearShip)
+            if (grid[cell.i, cell.j].State == CellState.ReservedByShip || grid[cell.i, cell.j].State == CellState.ReservedNearShip)
                 rightPlace = false;
         if (rightPlace)
-        {                
+        {
             foreach (GridPoint cell in nowHightLighted)
             {
-                currentShip.PositionOnGrid.Add(cell);
+                grid[cell.i, cell.j].State = CellState.ReservedByShip;
+            }
+            //TODO: Optimize that shit
+            foreach (var cell in nowHightLighted)
+            {
                 if (cell.i < 9)
                 {
-                    grid[cell.i + 1, cell.j].reservedNearShip = true;
+                    if (grid[cell.i + 1, cell.j].State != CellState.ReservedByShip)
+                    {
+                        grid[cell.i + 1, cell.j].State = CellState.ReservedNearShip;
+                        currentShip.NearShipCells.Add(grid[cell.i + 1, cell.j]);
+                    }
                     if (cell.j < 9)
-                        grid[cell.i + 1, cell.j + 1].reservedNearShip = true;
+                        if (grid[cell.i + 1, cell.j + 1].State != CellState.ReservedByShip)
+                        {
+                            grid[cell.i + 1, cell.j + 1].State = CellState.ReservedNearShip;
+                            currentShip.NearShipCells.Add(grid[cell.i + 1, cell.j + 1]);
+                        }
                     if (cell.j > 0)
-                        grid[cell.i + 1, cell.j - 1].reservedNearShip = true;
+                        if (grid[cell.i + 1, cell.j - 1].State != CellState.ReservedByShip)
+                        {
+                            grid[cell.i + 1, cell.j - 1].State = CellState.ReservedNearShip;
+                            currentShip.NearShipCells.Add(grid[cell.i + 1, cell.j - 1]);
+                        }
                 }
                 if (cell.i > 0)
                 {
-                    grid[cell.i - 1, cell.j].reservedNearShip = true;
+                    if (grid[cell.i - 1, cell.j].State != CellState.ReservedByShip)
+                    {
+                        grid[cell.i - 1, cell.j].State = CellState.ReservedNearShip;
+                        currentShip.NearShipCells.Add(grid[cell.i - 1, cell.j]);
+                    }
                     if (cell.j < 9)
-                        grid[cell.i - 1, cell.j + 1].reservedNearShip = true;
+                        if (grid[cell.i - 1, cell.j + 1].State != CellState.ReservedByShip)
+                        {
+                            grid[cell.i - 1, cell.j + 1].State = CellState.ReservedNearShip;
+                            currentShip.NearShipCells.Add(grid[cell.i - 1, cell.j + 1]);
+                        }
                     if (cell.j > 0)
-                        grid[cell.i - 1, cell.j - 1].reservedNearShip = true;
+                        if (grid[cell.i - 1, cell.j - 1].State != CellState.ReservedByShip)
+                        {
+                            grid[cell.i - 1, cell.j - 1].State = CellState.ReservedNearShip;
+                            currentShip.NearShipCells.Add(grid[cell.i - 1, cell.j - 1]);
+                        }
                 }
                 if (cell.j < 9)
                 {
-                    grid[cell.i, cell.j + 1].reservedNearShip = true;
+                    if (grid[cell.i, cell.j + 1].State != CellState.ReservedByShip)
+                    {
+                        grid[cell.i, cell.j + 1].State = CellState.ReservedNearShip;
+                        currentShip.NearShipCells.Add(grid[cell.i, cell.j + 1]);
+                    }
                     if (cell.i < 9)
-                        grid[cell.i + 1, cell.j + 1].reservedNearShip = true;
+                        if (grid[cell.i + 1, cell.j + 1].State != CellState.ReservedByShip)
+                        {
+                            grid[cell.i + 1, cell.j + 1].State = CellState.ReservedNearShip;
+                            currentShip.NearShipCells.Add(grid[cell.i + 1, cell.j + 1]);
+                        }
                     if (cell.i > 0)
-                        grid[cell.i - 1, cell.j + 1].reservedNearShip = true;
+                        if (grid[cell.i - 1, cell.j + 1].State != CellState.ReservedByShip)
+                        {
+                            grid[cell.i - 1, cell.j + 1].State = CellState.ReservedNearShip;
+                            currentShip.NearShipCells.Add(grid[cell.i - 1, cell.j + 1]);
+                        }
                 }
                 if (cell.j > 0)
                 {
-                    grid[cell.i, cell.j - 1].reservedNearShip = true;
+                    if (grid[cell.i, cell.j - 1].State != CellState.ReservedByShip)
+                    {
+                        grid[cell.i, cell.j - 1].State = CellState.ReservedNearShip;
+                        currentShip.NearShipCells.Add(grid[cell.i, cell.j - 1]);
+                    }
                     if (cell.i < 9)
-                        grid[cell.i + 1, cell.j - 1].reservedNearShip = true;
+
+                        if (grid[cell.i + 1, cell.j - 1].State != CellState.ReservedByShip)
+                        {
+                            grid[cell.i + 1, cell.j - 1].State = CellState.ReservedNearShip;
+                            currentShip.NearShipCells.Add(grid[cell.i + 1, cell.j - 1]);
+                        }
                     if (cell.i > 0)
-                        grid[cell.i - 1, cell.j - 1].reservedNearShip = true;
+                        if (grid[cell.i - 1, cell.j - 1].State != CellState.ReservedByShip)
+                        {
+                            grid[cell.i - 1, cell.j - 1].State = CellState.ReservedNearShip;
+                            currentShip.NearShipCells.Add(grid[cell.i - 1, cell.j - 1]);
+                        }
                 }
-                grid[cell.i, cell.j].reservedByShip = true;
                 grid[cell.i, cell.j].ChangeColor(Color.black);
             }
 
@@ -324,31 +351,37 @@ public class Grid : MonoBehaviour, ISeaBattleRules
         return rightPlace;
     }
 
-    /// <summary>
-    /// Calculate index in grid based on coords
-    /// </summary>
-    /// <param name="x">X coord</param>
-    /// <param name="y">Y coord</param>
-    /// <returns>Position on grid</returns>
-    private int CoordToIndex(int x, int y)
+    public void ActivateShooting(GridCell.MissedShotEventHandler missedShotEventHandler)
     {
-        if (x >= 0 && y >= 0 && x < gridWidth && y < gridHeight)
-            return x  + (y * gridWidth);
-        else
-            return INVALID_CELL_IDX;
+        for (int i = 0; i < grid.GetLength(0); i++)
+            for (int j = 0; j < grid.GetLength(1); j++)
+            {
+                grid[i, j].cellObject.AddComponent(typeof(CellClick));
+                grid[i, j].cellObject.GetComponent<CellClick>().position = new GridPoint(i, j);
+
+                grid[i, j].MissedShotEvent += missedShotEventHandler;
+                grid[i, j].HitEvent += OnHit;
+            }
     }
 
-    /// <summary>
-    /// Calculate grid coords based on given index
-    /// </summary>
-    /// <param name="i">Index to calculate coords</param>
-    /// <returns>Vector2 coords</returns>
-    private Vector2 IndexToCoord(int i)
+    public void ActivateGrid()
     {
-        if (i >= 0 && i < grid.Length)
-            return new Vector2(i % gridWidth, i / gridWidth);
-        else
-            return INVALID_COORDS;
+        for (int i = 0; i < grid.GetLength(0); i++)
+            for (int j = 0; j < grid.GetLength(1); j++)
+            {
+                if (grid[i, j].cellObject.GetComponent<CellClick>() != null)
+                    grid[i, j].cellObject.GetComponent<CellClick>().enabled = true;
+            }
+    }
+
+    public void DeactivateGrid()
+    {
+        for (int i = 0; i < grid.GetLength(0); i++)
+            for (int j = 0; j < grid.GetLength(1); j++)
+            {
+                if (grid[i, j].cellObject.GetComponent<CellClick>() != null)
+                    grid[i, j].cellObject.GetComponent<CellClick>().enabled = false;
+            }
     }
 
     /// <summary>
@@ -356,9 +389,26 @@ public class Grid : MonoBehaviour, ISeaBattleRules
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="e"></param>
-    public void OnCellMouseOver(object sender, MouseOverEventArgs e)
+    public void OnCellMouseOver(object sender, MouseActionEventArgs e)
     {
-        hooverCellPos = e.HooverPoint;
+        hooverCellPos = e.Point;
+    }
+
+    public void OnCellClick(object sender, MouseActionEventArgs e)
+    {
+        grid[e.Point.i, e.Point.j].Shoot();
+    }
+
+    public void OnHit(object sender, MouseActionEventArgs e)
+    {
+        foreach (var ship in ships)
+        {
+            if (ship.PositionOnGrid.Exists(gp => gp == e.Point))
+            {
+                ship.Hit(e.Point);
+                return;
+            }
+        }
     }
 
     /// <summary>
@@ -371,11 +421,32 @@ public class Grid : MonoBehaviour, ISeaBattleRules
             for (int j = 0; j < grid.GetLength(1); j++)
             {
                 // default coloring for reserved and free grid tiles
-                if (grid[i, j].reservedByShip)
-                    grid[i, j].ChangeColor(Color.black);
-                else if (grid[i, j].reservedNearShip)
-                    grid[i, j].ChangeColor(Color.gray);
-                else grid[i, j].ChangeColor(Color.white);
+                switch (grid[i, j].State)
+                {
+                    case CellState.ReservedByShip:
+                        grid[i, j].ChangeColor(Color.black);
+                        break;
+                    case CellState.ReservedNearShip:
+                        grid[i, j].ChangeColor(Color.gray);
+                        break;
+                    case CellState.ShootedShip:
+                        grid[i, j].ChangeColor(Color.red);
+                        break;
+                    default:
+                        grid[i, j].ChangeColor(Color.white);
+                        break;
+                }
+            }
+        }
+    }
+
+    public void HideShips()
+    {
+        for (int i = 0; i < gridHeight; i++)
+        {
+            for (int j = 0; j < gridWidth; j++)
+            {
+                grid[i, j].ChangeColor(Color.white);
             }
         }
     }
@@ -391,13 +462,12 @@ public class Grid : MonoBehaviour, ISeaBattleRules
         {
             for (int j = 0; j < gridWidth; j++)
             {
-                grid[i, j].reservedByShip = false;
-                grid[i, j].reservedNearShip = false;
+                grid[i, j].State = CellState.Empty;
             }
         }
         ResetHighlighting();
         ships = new List<Ship>();
-        currentShip = null;
+        CurrentShip = null;
     }
 }
 

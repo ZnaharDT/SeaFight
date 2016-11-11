@@ -25,15 +25,15 @@ public class OpponentChose : MonoBehaviour {
     public void OnStart()
     {
         var playerHolder = GameObject.Find("PlayerHolder");
-        playerHolder.GetComponent<PlayerHolder>().player = new Player(playerNameField.text);
+        playerHolder.GetComponent<PlayerHolder>().player = new HumanPlayer(playerNameField.text);
         if (opponentNameField.interactable)
         {
-            playerHolder.GetComponent<PlayerHolder>().player = new Player(opponentNameField.text);
+            playerHolder.GetComponent<PlayerHolder>().player = new HumanPlayer(opponentNameField.text);
             SceneManager.LoadScene("GameVsHuman");
         }
         else
         {
-            playerHolder.GetComponent<PlayerHolder>().opponent = new Player("AI");
+            playerHolder.GetComponent<PlayerHolder>().opponent = new AIPlayer();
             SceneManager.LoadScene("GameVsAI");
         }
     }

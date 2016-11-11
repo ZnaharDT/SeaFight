@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections;
+using SeaBattle;
 
 public class SampleShip : MonoBehaviour {
 
@@ -29,7 +30,7 @@ public class SampleShip : MonoBehaviour {
                 cube.transform.localPosition = new Vector2(0, i * coordsMultiplier);
                 cube.transform.localScale = Vector3.one * cubeSize;
 
-                ship[i] = new GridCell(cube);
+                ship[i] = new GridCell(cube, new GridPoint(1, 1));
         }
     }
 
@@ -38,11 +39,18 @@ public class SampleShip : MonoBehaviour {
         for (int i = 0; i < ship.GetLength(0); i++)
         {
                 // default coloring for reserved and free grid tiles
-                if (ship[i].reservedByShip)
-                    ship[i].ChangeColor(Color.black);
-                else if (ship[i].reservedNearShip)
-                    ship[i].ChangeColor(Color.gray);
-                else ship[i].ChangeColor(Color.white);
+                switch (ship[i].State)
+                {
+                    case CellState.ReservedByShip:
+                        ship[i].ChangeColor(Color.black);
+                        break;
+                    case CellState.ReservedNearShip:
+                        ship[i].ChangeColor(Color.gray);
+                        break;
+                    default:
+                        ship[i].ChangeColor(Color.white);
+                        break;
+                }
         }
     }
 }
