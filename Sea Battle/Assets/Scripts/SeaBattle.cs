@@ -121,6 +121,10 @@ namespace SeaBattle
         private const int ROT_90 = 1;
         private const int ROT_COUNT = 2;
 
+        public delegate void OnShipDestoyedEventHandler(Ship sender, EventArgs e);
+
+        public event OnShipDestoyedEventHandler OnShipDestroyedEvent;
+
         public int width;
         public int height;
         public int decks;
@@ -129,15 +133,16 @@ namespace SeaBattle
         public List<GridCell> NearShipCells { get; private set; }
 
         private int rotation;
-
         protected bool[] ShipCells;
 
         /// <summary>
         /// Initialize new ship with specified number of decks
         /// </summary>
         /// <param name="_decks">Number of decks</param>
-        public Ship(int _decks)
+        /// <param name="handler">Method to delete destroyed ship from ship list</param>
+        public Ship(int _decks, OnShipDestoyedEventHandler handler)
         {
+            OnShipDestroyedEvent = handler;
             width = _decks;
             decks = _decks;
             height = 1;
@@ -202,9 +207,11 @@ namespace SeaBattle
 
         private void DestroyShip()
         {
+            OnShipDestroyedEvent(this, new EventArgs());
             foreach (var cell in NearShipCells)
             {
                 cell.ChangeColor(Color.cyan);
+                cell.State = CellState.EmptyShooted;
             }
         }
     }

@@ -29,7 +29,10 @@ namespace Assets.Scripts
         {
             if (!enabled) return;
             if (MouseClickEvent != null)
+            {
                 MouseClickEvent(this, new MouseActionEventArgs(position));
+                enabled = false;
+            }
         }
     }
 }

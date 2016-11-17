@@ -40,6 +40,10 @@ public class Grid : MonoBehaviour, ISeaBattleRules
 
     public event ShipPlacedEventHandler ShipPlacedEvent;
 
+    public delegate void EndGameEventHandler(Grid sender, EventArgs e);
+
+    public event EndGameEventHandler EndGameEvent;
+
     void Awake()
     {
     }
@@ -64,6 +68,9 @@ public class Grid : MonoBehaviour, ISeaBattleRules
                 cube.transform.localScale = Vector3.one * cubeSize;
                 cube.tag = "grid_cell";
                 cube.AddComponent<CellHover>().position = new GridPoint(i, j);
+                cube.AddComponent(typeof(CellClick));
+                cube.GetComponent<CellClick>().position = new GridPoint(i, j);
+
 
                 grid[i, j] = new GridCell(cube, new GridPoint(i, j));
             }
@@ -113,7 +120,7 @@ public class Grid : MonoBehaviour, ISeaBattleRules
             while (!shipAdded)
             {
                 List<GridPoint> randomRange = GetFreeCells();
-                shipAdded = CheckFitRandom(new Ship(1), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
+                shipAdded = CheckFitRandom(new Ship(1, OnShipDestroyed), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
             }
         }
         for (int i = 0; i < twoDeckedCount; i++)
@@ -122,7 +129,7 @@ public class Grid : MonoBehaviour, ISeaBattleRules
             while (!shipAdded)
             {
                 List<GridPoint> randomRange = GetFreeCells();
-                shipAdded = CheckFitRandom(new Ship(2), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
+                shipAdded = CheckFitRandom(new Ship(2, OnShipDestroyed), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
             }
         }
         for (int i = 0; i < threeDeckedCount; i++)
@@ -131,7 +138,7 @@ public class Grid : MonoBehaviour, ISeaBattleRules
             while (!shipAdded)
             {
                 List<GridPoint> randomRange = GetFreeCells();
-                shipAdded = CheckFitRandom(new Ship(3), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
+                shipAdded = CheckFitRandom(new Ship(3, OnShipDestroyed), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
             }
         }
         for (int i = 0; i < fourDeckedCount; i++)
@@ -140,7 +147,7 @@ public class Grid : MonoBehaviour, ISeaBattleRules
             while (!shipAdded)
             {
                 List<GridPoint> randomRange = GetFreeCells();
-                shipAdded = CheckFitRandom(new Ship(4), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
+                shipAdded = CheckFitRandom(new Ship(4, OnShipDestroyed), randomRange[UnityEngine.Random.Range(0, randomRange.Count)]);
             }
         }
        
@@ -356,9 +363,6 @@ public class Grid : MonoBehaviour, ISeaBattleRules
         for (int i = 0; i < grid.GetLength(0); i++)
             for (int j = 0; j < grid.GetLength(1); j++)
             {
-                grid[i, j].cellObject.AddComponent(typeof(CellClick));
-                grid[i, j].cellObject.GetComponent<CellClick>().position = new GridPoint(i, j);
-
                 grid[i, j].MissedShotEvent += missedShotEventHandler;
                 grid[i, j].HitEvent += OnHit;
             }
@@ -409,6 +413,15 @@ public class Grid : MonoBehaviour, ISeaBattleRules
                 return;
             }
         }
+    }
+
+    public void OnShipDestroyed(Ship sender, EventArgs e)
+    {
+        ships.Remove(sender);
+        if (ships.Count == 0)
+            if (EndGameEvent != null)
+                EndGameEvent(this, new EventArgs());
+
     }
 
     /// <summary>

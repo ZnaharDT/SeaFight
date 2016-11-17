@@ -43,6 +43,7 @@ public class GridCell
             State = CellState.ShootedShip;
             if (HitEvent != null)
                 HitEvent(this, new MouseActionEventArgs(Position));
+            HitEvent = null;
         }
         else if (State == CellState.Empty || State == CellState.ReservedNearShip)
         {
@@ -50,6 +51,7 @@ public class GridCell
             ChangeColor(Color.cyan);
             if (MissedShotEvent != null)
                 MissedShotEvent(this, new MouseActionEventArgs(Position));
+            MissedShotEvent = null;
         }
     }
 

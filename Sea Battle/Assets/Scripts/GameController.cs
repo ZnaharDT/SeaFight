@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using System.Collections;
 using UnityEngine.UI;
 using SeaBattle;
@@ -28,6 +29,9 @@ public class GameController : MonoBehaviour {
         activePlayer = firstPlayer;
         uiController = userInterface.GetComponent<UIController>();
         uiController.ActivePlayerName.text = firstPlayer.Name;
+
+        firstPlayer.PlayerGrid.EndGameEvent += OnEndGame;
+        secondPlayer.PlayerGrid.EndGameEvent += OnEndGame;
     }
 
     // Use this for initialization
@@ -122,6 +126,11 @@ public class GameController : MonoBehaviour {
         secondPlayer.PlayerGrid.HideShips();
     }
 
+    public void OnEndGame(Grid sender, EventArgs e)
+    {
+        
+    }
+
     private void OnPlayerMiss(object sender, MouseActionEventArgs args)
     {
         SwitchPlayer();
@@ -129,22 +138,22 @@ public class GameController : MonoBehaviour {
 
     public void OnOneDeckedButtonClick()
     {
-        activePlayer.PlayerGrid.CurrentShip = new Ship(1);
+        activePlayer.PlayerGrid.CurrentShip = new Ship(1, activePlayer.PlayerGrid.OnShipDestroyed);
     }
 
     public void OnTwoDeckedButtonClick()
     {
-        activePlayer.PlayerGrid.CurrentShip = new Ship(2);
+        activePlayer.PlayerGrid.CurrentShip = new Ship(2, activePlayer.PlayerGrid.OnShipDestroyed);
     }
 
     public void OnThreeDeckedButtonClick()
     {
-        activePlayer.PlayerGrid.CurrentShip = new Ship(3);
+        activePlayer.PlayerGrid.CurrentShip = new Ship(3, activePlayer.PlayerGrid.OnShipDestroyed);
     }
 
     public void OnFourDeckedButtonClick()
     {
-        activePlayer.PlayerGrid.CurrentShip = new Ship(4);
+        activePlayer.PlayerGrid.CurrentShip = new Ship(4, activePlayer.PlayerGrid.OnShipDestroyed);
     }
 
     public void OnShipPlaced(object sender, ShipPlacedEventArgs e)
